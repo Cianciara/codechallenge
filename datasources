@@ -1,0 +1,462 @@
+from PathFinder import DefaultPath
+from ColorfulTerminal import ColorTerm
+from glob import glob
+import datetime
+import re
+from collections import OrderedDict
+import pandas as pd
+from pandas.tseries.offsets import BDay
+import time
+from StringIO import StringIO
+from zipfile import ZipFile
+import os,sys
+
+class DataSources(object):
+	"""
+	Class to pull data from any of the listed datasources for either the n
+	most recent days or for a range of dates and concatentate them into a
+	single csv. Possible options are:
+		carbon_exception, counterparty_info, triresolve_eod, delta_exception,
+		recon_roster, fx_rate, derivative_raw, cftc_10pct, acadiasoft,
+		open_aged, apac_disputes, opus_im, opus_vm, opus_3m.
+	To use this class in another program, simply call
+	>>> DS.program_name(num = n).concat() #for the n most recent files
+	or 
+	>>> DS.program_name(dates = 'YYYY/MM/DD-YYYY/MM/DD').concat() #for daterange
+	"""
+	def __init__(self, data_path, name, date_format, header_line, ext,
+										num = None, dates = None):
+		self.data_path = data_path
+		self.name = name
+		self.date_format = date_format
+		self.ext = ext
+		self.header_line = header_line
+		self.num = num
+		self.dates = dates
+		self.col_names = None
+
+	@classmethod
+	def carbon_exception(cls, num=None, dates=None):
+		date_format = 'MMDD'
+		name = 'Exception Report '
+		ext = 'xlsx'
+		header_line = 3
+		return cls(DefaultPath(**{'carbon exception':True}).path, 
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def counterparty_info(cls, num=None, dates=None):
+		date_format = 'MMDDYYYY'
+		name = 'CptyInfo'
+		ext = 'csv'
+		header_line = 0
+		return cls(DefaultPath(**{'counterparty info':True}).path, 
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def triresolve_eod(cls, num=None, dates=None):
+		date_format = 'YYYY-MM-DD'
+		name = 'BAML_'
+		ext = 'zip'
+		header_line = 0
+		return cls(DefaultPath(**{'triresolve eod':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def delta_exception(cls, num=None, dates=None):
+		date_format = 'YYYYMMDD'
+		name = 'Delta_Exception_Report_MOD_'
+		ext = 'xlsx'
+		header_line = 0
+		return cls(DefaultPath(**{'delta exception':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def recon_roster(cls, num=None, dates=None):
+		date_format = 'YYYYMMDD'
+		name = 'ReconRosterCheck_'
+		ext = 'csv'		
+		header_line = 0
+		return cls(DefaultPath(**{'daily roster':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def fx_rate(cls, num=None, dates=None):
+		date_format = 'YYYY-MM-DD'
+		name = 'FX_Rates_Approx_'
+		ext = 'csv'
+		header_line = 0
+		return cls(DefaultPath(**{'fx rate':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def derivative_raw(cls, num=None, dates=None):
+		#DerivativeRaw-2017-05-15.xlsx
+		date_format = 'YYYY-MM-DD'
+		name = 'DerivativeRaw-'
+		ext = 'xlsx'
+		header_line = 0
+		return cls(DefaultPath(**{'derivative raw':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def cftc_10pct(cls, num=None, dates=None):
+		date_format = 'YYYY_MM_DD'
+		name = 'CFTC_Report_MTM_'
+		ext = 'xlsx'
+		header_line = 7
+		return cls(DefaultPath(**{'cftc10pct report':True}).path,
+						name, date_format, header_line, ext, num, dates)	
+
+	@classmethod
+	def acadiasoft(cls, num=None, dates=None):
+		date_format = 'MMDDYYYY'
+		name = 'USD Converted AcadiaSoft_'
+		ext = 'csv'
+		header_line = 0
+		return cls(DefaultPath(**{'acadiasoft':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def open_aged(cls, num=None, dates=None):
+		date_format = 'DD.MM.YY'
+		name = 'Daily Combined Open Aged Report COB_'
+		ext = 'xls'
+		header_line = 3
+		return cls(DefaultPath(**{'open aged':True}).path,
+						name, date_format, header_line, ext, num, dates)
+	
+	@classmethod
+	def apac_disputes(cls, num=None, dates=None):
+		date_format = 'MM-DD-YYYY'
+		name = 'APAC '
+		ext = 'xlsx'
+		header_line = 4
+		return cls(DefaultPath(**{'apac disputes':True}).path,
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def opus_im(cls, num=None, dates=None):
+		date_format = 'YYYY-MM-DD'
+		name = 'DailyDisputeIM_T0_'
+		ext = 'xlsx'
+		header_line = 0
+		return cls(DefaultPath(**{'opus reports new':True}).path + '\\2017'
+						+ '\\*' + '\\*' + '\\',
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def opus_vm(cls, num=None, dates=None):
+		date_format = 'YYYY-MM-DD'
+		name = 'DailyDisputeVM_T0_'
+		ext = 'xlsx'
+		header_line = 0
+		return cls(DefaultPath(**{'opus reports new':True}).path + '\\2017'
+						+ '\\*' + '\\*' + '\\',
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def opus_3m(cls, num=None, dates=None):
+		date_format = 'YYYY-MM-DD'
+		name = 'AllDisputesHistoryInTheLast3Months_'
+		ext = 'xlsx'
+		header_line = 0
+		return cls(DefaultPath(**{'opus reports new':True}).path + '\\2017' 
+						+ '\\*' + '\\*' + '\\',
+						name, date_format, header_line, ext, num, dates)
+
+	@classmethod
+	def security_fails(cls, num=None, dates=None):
+		date_format = 'MMDDYYYY'
+		name = 'InTra__'
+		ext = 'xls'
+		header_line = 3
+		return cls(DefaultPath(**{'security fails':True}).path 
+						+ '\\*' + '\\',
+						name, date_format, header_line, ext, num, dates)
+
+	def date_parser(self):
+		'''
+		Gathers either the most recent dates or the date range requested and
+		converts them into the appropriate format.
+		'''
+		formatted_range = []
+		if self.dates == None:
+			last_date = datetime.datetime.today() - BDay(1)
+			begin_date = last_date - BDay(int(self.num)-1)
+			if self.num == 1:
+				date_range = last_date.date()
+				formatted_range.append(self.formatter(date_range))
+			else:
+				date_range = list(pd.bdate_range(begin_date, last_date))
+				for date in date_range:
+					formatted_range.append(self.formatter(date))
+
+		elif self.num == None:
+			if len(self.dates.split('-')) > 1:
+				last_date = pd.to_datetime(self.dates.split('-')[1])
+				begin_date = pd.to_datetime(self.dates.split('-')[0])
+				date_range = list(pd.bdate_range(begin_date, last_date))
+				for date in date_range:
+					formatted_range.append(self.formatter(date.date()))
+			elif len(self.dates.split('-')) == 1:
+				date = pd.to_datetime(self.dates)
+				formatted_range.append(self.formatter(date))
+
+		return formatted_range
+
+	def formatter(self, date):
+		if self.date_format == 'YYYY-MM-DD': 
+			return date.strftime('%Y-%m-%d')
+		elif self.date_format == 'MM-DD-YYYY': 
+			return date.strftime('%m-%d-%Y')
+		elif self.date_format == 'DD.MM.YY': 
+			return date.strftime('%d.%m.%y')
+		elif self.date_format == 'MMDDYYYY': 
+			return date.strftime('%m%d%Y')
+		elif self.date_format == 'YYYY_MM_DD': 
+			return date.strftime('%Y_%m_%d')
+		elif self.date_format == 'YYYYMMDD':  
+			return date.strftime('%Y%m%d')
+		elif self.date_format == 'MMDD': 
+			return date.strftime('%m%d')
+
+	def file_compiler(self):
+		'''
+		Takes the list of dates from date_parser() and returns the files
+		corresponding to those dates.
+		'''
+		formatted_range = self.date_parser()
+		files = []
+
+		if self.date_format =='YYYY-MM-DD':
+			file_list = glob(os.path.join(self.data_path, 
+										  self.name + '*.' + self.ext))
+			if self.num > 0:
+				return sorted(file_list, key = os.path.getctime)[-self.num:]
+			else:
+				return sorted(file_list, key = os.path.getctime)
+
+		else:
+			for date in formatted_range:
+				files.extend(glob(os.path.join(self.data_path,
+								  self.name + date + '*.' + self.ext)))
+			return files
+
+	def date_regex(self):
+		date_format = self.date_format
+		sym = ''
+		if len(date_format.split('_')) > 1:
+			sym = '_'
+			return [len(x) for x in date_format.split('_')], sym
+
+		elif len(date_format.split('-')) > 1:
+			sym = '-'
+			return [len(x) for x in date_format.split('-')], sym
+		elif len(date_format.split('.')) > 1:
+			sym = '.'
+			return [len(x) for x in date_format.split('.')], sym
+		else:
+			return [len(date_format),0,0], sym
+
+	def file_reader(self, filename):
+		'''
+		Reads in zip, csv, or excel files, uses the date_format to find the date
+		with a regex search and then changes the date format to be in the format
+		YYYY-MM-DD. Then drops null columns and returns df.
+		'''
+		date_rgx, self.sym = self.date_regex()
+		rgx = (str('\\d{' + str(date_rgx[0]) + '}') + str(self.sym) + 
+		       str('\\d{' + str(date_rgx[1]) + '}') + str(self.sym) +
+		       str('\\d{' + str(date_rgx[2]) + '}'))
+
+		date = re.search(rgx, filename).group(0)
+
+		if self.ext == 'zip':
+			input_zip = ZipFile(StringIO.getvalue(StringIO(filename)))
+			name = input_zip.namelist()[0]
+			buf = input_zip.open(name)
+			df = pd.read_csv(buf, header=self.header_line)
+		elif self.ext == 'csv':
+			df = pd.read_csv(filename, header=self.header_line)
+		else:
+			df = pd.read_excel(filename, header=self.header_line)
+
+		num_cols = len(df.columns)
+		self.col_names = list(df.columns)
+
+		if self.date_format == 'YYYYMMDD':
+			date = date[:4] + '-' + date[4:6] + '-' + date[6:8]
+
+		elif self.date_format == 'YYYY_MM_DD':
+			date_list = date.split('_')
+			date = date_list[0] + '-' + date_list[1] + '-' + date_list[2]
+
+		elif self.date_format == 'MMDDYYYY':
+			date = date[4:8] + '-' + date[:2] + '-' + date[2:4] 
+
+		elif self.date_format == 'DD.MM.YY':
+			date_list = date.split('.')
+			date = '20' + date_list[2] + '-' + date_list[1] + '-' + date_list[0]
+
+		elif self.date_format == 'MMDD':
+			date = (str(datetime.datetime.today().year) + '-' +
+			           date[:2] + '-' + date[2:4])
+
+		elif self.date_format == 'MM-DD-YYYY':
+			date_list = date.split('-')
+			date = date_list[2] + '-' + date_list[0] + '-' + date_list[1]
+
+		df['filedate'] = pd.to_datetime(date, yearfirst=True,
+				    infer_datetime_format=True)
+
+		#df.dropna(axis=0, how='any', thresh=(num_cols/2), inplace=True)
+		df.dropna(axis=1, how='all', inplace=True)
+		return df
+
+	def concat(self):
+		'''Concats the files together row-wise matching on the column names.'''
+		file_paths = self.file_compiler()
+		df_list = map(self.file_reader, file_paths)
+		
+		try:
+			df = pd.concat(df_list, axis=0)
+		except ValueError:
+			print '\nError: No recent files found. Check the data source\n'
+			raise ValueError
+		df.drop_duplicates(keep=False, inplace=True)
+		return df
+
+	def to_csv(self):
+		df = self.concat()
+		df.to_csv(os.path.join(os.path.expanduser('~') + '\\' + 'Desktop',
+		   self.name + '_' + datetime.datetime.today().strftime(r'%Y-%m-%d')
+		   + ' .csv'),
+		   encoding='utf-8', index=False)
+		return df
+
+	@staticmethod
+	def func_dict(num=None, dates=None):
+		D = {
+		'carbon_exception':DS.carbon_exception(num, dates),
+		'counterparty_info':DS.counterparty_info(num, dates),
+		'triresolve_eod':DS.triresolve_eod(num, dates),
+		'delta_exception':DS.delta_exception(num, dates),
+		'recon_roster':DS.recon_roster(num, dates),
+		'fx_rate':DS.fx_rate(num, dates),
+		'derivative_raw':DS.derivative_raw(num, dates),
+		'cftc_10pct':DS.cftc_10pct(num+1, dates),
+		'acadiasoft':DS.acadiasoft(num+1, dates),
+		'open_aged':DS.open_aged(num+1, dates),
+		'apac_disputes':DS.apac_disputes(num, dates),
+		'opus_im':DS.opus_im(num, dates),
+		'opus_vm':DS.opus_vm(num, dates),
+		'opus_3m':DS.opus_3m(num, dates),
+		'security_fails':DS.security_fails(num, dates)
+		}
+		return D
+
+	@staticmethod
+	def gui():
+		os.system('cls')
+		opts = ['interactive','save']
+		program_list = sorted(['carbon_exception',
+							   'counterparty_info',
+							   'triresolve_eod',
+							   'delta_exception',
+							   'recon_roster',
+							   'fx_rate',
+							   'derivative_raw',
+							   'cftc_10pct',
+							   'acadiasoft',
+							   'open_aged',
+							   'apac_disputes',
+							   'opus_im',
+							   'opus_vm',
+							   'opus_3m',
+							   'security_fails'])
+
+		outOpts = [ct.cText(x, 'green', 'bold') for x in opts]
+		option_input = raw_input(
+			"Input one of '" + ("', '").join(outOpts) + "' to start: ")
+		
+		if option_input not in opts:
+			print 'Error: Invalid Choice'
+			sys.exit()
+
+		programs = OrderedDict()
+		k = 0
+		for program in program_list:
+			programs[k] = program
+			k+=1
+
+		msg = "\rAvailable Sources:%s\n\n%7s | %-1s\n" % (" "*14,"Option",
+		                                                               "Source")
+		for num, program in programs.iteritems():
+			row = "%23s | %-47s\n" % (ct.cText(str(num), 'green'),
+									  ct.cText(program, 'purple'))
+			msg += row
+
+		option_number = int(raw_input(msg + '\nOption:'))
+		program_choice = programs[option_number]
+
+		return option_input, program_choice
+
+
+if __name__ == '__main__':
+	ct = ColorTerm()
+	DS = DataSources
+	option_input, program_choice = DS.gui()
+
+	if option_input.lower() == 'interactive':
+		msg ='Please choose either\n%s\n%s\nChoice:' % (
+		ct.cText('A: Use most recent file',
+			'purple'),
+		ct.cText('B: Date selection',
+			'cyan'))
+		option_select = raw_input(msg)
+		if 'A' in option_select and 'B' not in option_select:
+			function_dictionary = DS.func_dict(num=1)
+			print function_dictionary[program_choice].concat()
+		elif 'B' in option_select and 'A' not in option_select:
+			dates = raw_input('Enter desired report date in format YYYY/MM/DD.'
+				'\nDate: ')
+
+			function_dictionary = DS.func_dict(dates=dates)
+			print function_dictionary[program_choice].concat()					
+		else:
+			print 'Error: Invalid option.'
+
+	elif option_input.lower() == 'save':
+		msg ='Please choose either\n%s\n%s\nChoice:' % (
+			ct.cText('A: Use most recent files (you will choose how many)',
+				'purple'),
+			ct.cText('B: Dates selection (you will choose the dates to use)',
+				'cyan'))
+		option_select = raw_input(msg)
+		if 'A' in option_select and 'B' not in option_select:
+			count_input = int(raw_input(
+				'Choose the numbers of files of the data source you wish to '
+					'concatenate: '))	
+			function_dictionary = DS.func_dict(num=count_input)
+			output = function_dictionary[program_choice].to_csv()
+			print 'Process completed successfully. File saved to desktop'
+
+		elif 'B' in option_select and 'A' not in option_select:
+			dates = raw_input(
+				'Enter dates of report to concatenate in format YYYY/MM/DD'
+					'-YYYY/MM/DD.\nDates: ')
+			function_dictionary = DS.func_dict(dates=dates)
+			output = function_dictionary[program_choice].to_csv()
+			print 'Process completed successfully. File saved to desktop'
+		else:
+			print 'Error: Invalid option.'
+	else:
+		print 'Error: Invalid option.'
+
+
+
+	
+
+
+
